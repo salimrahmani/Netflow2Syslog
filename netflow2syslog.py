@@ -1,23 +1,22 @@
 from multiprocessing import Process
 from ConfigParser import SafeConfigParser
 import subprocess, signal
-import sys
-import os
+import sys, os
+import syslog
+import commands
+import logging, logging.handlers
 import argparse
 import requests
 import pynfdump
 import pyinotify
-import logging
 import netsyslog
-import syslog
-import commands
-import logging, logging.handlers
 
 
 __author__= 'Salim Rahmani' 
 
 class Util:
 
+	# convert string from config file to facility!
 	@staticmethod
 	def str2facility(f):
 		if(f=="LOG_AUTH"):
@@ -61,6 +60,7 @@ class Util:
 		if(f=="LOG_LOCAL7"):
 			return syslog.LOG_LOCAL7
 
+	# convert string to priority!
 	@staticmethod
 	def str2priority(p):
 		if(p=="LOG_ALERT"):
@@ -80,6 +80,7 @@ class Util:
 		if(p=="LOG_WARNING"):
 			return syslog.LOG_WARNING
 
+	# convert tos value 2 dscp
 	@staticmethod
 	def tos2dscp(tos):
 		if(tos < 32):
@@ -125,7 +126,9 @@ class Util:
 		if(tos>=224):
 			return 56
 
+
 class Collector:
+
 	def __init__(self, params):
 		self.time = params[0]
 		self.path = params[1]+"/live/"+params[2]
@@ -138,12 +141,12 @@ class Collector:
 	def runCollector(self):
 		if self.checkPort() != 0: # Port is open
 			print self.port + ' is Open'		
-			if os.path.isdir(self.path)==False:
+			if os.path.isdir(self.path)==False: # Create the directory to hold the collector's files
 				print 'Creating the directory in '+self.path
 				subprocess.call("mkdir "+self.path,shell=True)
 			command = "nfcapd -w -t "+self.time+" -D -l "+self.path+" -p "+self.port
 			print 'Launch the collector program: nfcapd'
-			subprocess.call(command,shell=True)
+			subprocess.call(command,shell=True) #Launch the collector program by exec the command
 		else:
 			print "Port "+self.port+" is used! Please change it"
 			
@@ -178,7 +181,6 @@ class Processor:
 class EventHandler(pyinotify.ProcessEvent):
 	
 	def __init__(self, params):
-
 		self.timerotation = int(params[0]) #convert time from sec to msec
 		self.path = params[1]+"/live/"+params[2]
 		self.basedir = params[1]
@@ -197,6 +199,10 @@ class EventHandler(pyinotify.ProcessEvent):
 		records = pynfdump.search_file(event.pathname,"")
 		self.logRecords(records,self.syslogserverlist,Util.str2facility(self.syslogfacility),Util.str2priority(self.syslogpriority),self.timerotation)
 	
+	def aggregateRecords(self, records):
+
+
+
 	def logRecords(self,records,syslogserverlist,syslogfacility,syslogpriority,timerotation):
 		d = {}
 		count = 0
@@ -252,10 +258,10 @@ class EventHandler(pyinotify.ProcessEvent):
 
 def worker(*params):
 	try:
-		#collect
+		#collect netflow
 		collec = Collector(params)
 		collec.runCollector()
-		#process: read & send
+		#process: read, aggregate, & send
 		proc = Processor(params)
 		proc.runProcessor()
 	except SystemExit:
@@ -269,10 +275,10 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Script to collect, process, and send netflow data to syslog remote server(s)')
 	#check if the user has privileges 	
 	if os.getuid() == 0:
-	#Initialize the variables
+	#initialize the variables
 		procs = []
 		parser = SafeConfigParser()
-		parser.read('Config.ini')
+		parser.read('Config.ini') #parse the config file
 		
 		for section in parser.sections():
 			params = []
@@ -287,7 +293,7 @@ if __name__ == '__main__':
 			procs.append(p)
 			p.start()
 	
-	# Wait for all worker processes to finish
+	# wait for all worker processes to finish
 		for p in procs:
 			p.join()
 	else:
