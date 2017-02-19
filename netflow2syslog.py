@@ -11,7 +11,6 @@ import pynfdump
 import pyinotify
 import netsyslog
 
-
 __author__= 'Salim Rahmani' 
 
 class Util:
@@ -199,10 +198,6 @@ class EventHandler(pyinotify.ProcessEvent):
 		records = pynfdump.search_file(event.pathname,"")
 		self.logRecords(records,self.syslogserverlist,Util.str2facility(self.syslogfacility),Util.str2priority(self.syslogpriority),self.timerotation)
 	
-	def aggregateRecords(self, records):
-
-
-
 	def logRecords(self,records,syslogserverlist,syslogfacility,syslogpriority,timerotation):
 		d = {}
 		count = 0
@@ -210,7 +205,6 @@ class EventHandler(pyinotify.ProcessEvent):
 			l = []
 			key = str(r['srcip']) + " " + str(r['srcport'])+ " " + str(r['dstip']) + " " + str(r['dstport']) 
 			if not d.has_key(key):
-
 				l.append(r['af'])
 				l.append(r['first'])
 				l.append(r['last'])
